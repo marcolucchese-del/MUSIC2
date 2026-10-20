@@ -8,25 +8,40 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+// Endpoint di test
 app.get('/api/status', (req, res) => {
-  res.json({ status: 'ok', message: 'Backend attivo!' });
+  res.json({ status: 'ok', message: 'Backend attivo e veloce!' });
 });
 
-app.get('/api/stream', async (req, res) => {
-  const streamUrl = req.query.url;
-  if (!streamUrl) return res.status(400).send('URL mancante');
+// Ricerca brani tramite API Jamendo (Gratuita e veloce)
+app.get('/api/search', async (req, res) => {
+  const query = req.query.q;
+  if (!query) return res.status(400).json({ error: 'Termine di ricerca mancante' });
 
   try {
-    const response = await axios({
-      method: 'get',
-      url: streamUrl,
-      responseType: 'stream',
-      headers: { 'User-Agent': 'Mozilla/5.0' }
+    const response = await axios.get('https://api.jamendo.com/v3.0/tracks/', {
+      params: {
+        client_id: '56631f22', // Client ID pubblico demo Jamendo
+        format: 'json',
+        limit: 20,
+        search: query,
+        include: 'musicinfo'
+      }
     });
-    res.setHeader('Content-Type', response.headers['content-type'] || 'audio/mpeg');
-    response.data.pipe(res);
+
+    const items = response.data.results.map(track => ({
+      id: track.id,
+      title: track.name,
+      artist: track.artist_name,
+      duration: Math.floor(track.duration / 60) + ':' + ('0' + Math.floor(track.duration % 60)).slice(-2),
+      thumbnail: track.image || 'https://via.placeholder.com/150',
+      audioUrl: track.audio
+    }));
+
+    res.json(items);
   } catch (error) {
-    res.status(500).send('Errore nello streaming');
+    console.error('Errore nella ricerca:', error.message);
+    res.status(500).json({ error: 'Errore durante la ricerca' });
   }
 });
 
